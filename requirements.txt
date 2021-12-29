@@ -1,0 +1,5 @@
+google
+requests
+slack-alerts
+slackclient
+argparse
