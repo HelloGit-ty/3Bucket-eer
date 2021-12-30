@@ -3,3 +3,4 @@ requests
 slack-alerts
 slackclient
 argparse
+termcolor
