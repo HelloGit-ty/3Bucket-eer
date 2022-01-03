@@ -462,7 +462,7 @@ def auto(creds, project_name, WL, WH):
             heading = "FORMAT :- \nalert time | buck/obj name | public : role : alUsers/allAuthUsers | creation time | link" + "\n\n\n"
             for al in slack_al:
                 c = c+1
-                alert = str(c) + ". " + alert + al + "\n\n"
+                alert = alert + str(c) + ". " + al + "\n\n"
             final_alert = heading + alert
             alerter.critical(final_alert)
     else:
