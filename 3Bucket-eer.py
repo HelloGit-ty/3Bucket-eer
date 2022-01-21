@@ -444,7 +444,7 @@ def auto(creds, project_name, WL, WH):
                             if str(binding["members"]) == "{'allUsers'}" or str(binding["members"]) == "{'allAuthenticatedUsers'}":
                                 alert_time = datetime.datetime.now()
                                 compose = str(alert_time) + " | " + buck.name + " | " + "Public" + " | " + str(binding["role"]) + " | " + str(binding["members"]) + " | " + str(meta.time_created) + " | " + "https://console.cloud.google.com/storage/browser/{}".format(buck.name)
-                                print(compose)
+                                #print(compose)
                                 slack_al.append(compose)
                             else:
                                 pass
@@ -459,7 +459,7 @@ def auto(creds, project_name, WL, WH):
                                     if entry["entity"] == "allUsers" or entry["entity"] == "allAuthenticatedUsers":
                                         alert_time = datetime.datetime.now()
                                         compose = str(alert_time) + " | " + blobs.name + " | " + "Public" + " | " + str(entry["role"]) + " | " + str(entry["entity"]) + " | " + str(x.updated) + " | " + "https://storage.googleapis.com/{}/{}".format(buck.name, blobs.name)
-                                        print(compose)
+                                        #print(compose)
                                         slack_al.append(compose)
                                     else:
                                         pass
