@@ -239,7 +239,7 @@ def buck_list(creds, out, project_name):
                 str1 = "Uniform Access control"
                 outz.append(str1)
                 print(str1)
-            elif meta.iam_configuration.uniform_bucket_level_access_enabled == False:
+            elif not meta.iam_configuration.uniform_bucket_level_access_enabled:
                 str1 = "Fine-grained access control"
                 outz.append(str1)
                 print(str1)
@@ -250,7 +250,7 @@ def buck_list(creds, out, project_name):
             pol = client.bucket(str(buck.name))
             policy = pol.get_iam_policy(requested_policy_version=3)
             for binding in policy.bindings:
-                if str(binding["members"]) == "{'allUsers'}" or str(binding["members"]) == "{'allAuthenticatedUsers'}":
+                if "allUsers" in binding["members"] or 'allAuthenticatedUsers' in binding["members"]:
                     flag = 1
                     str1 = "This bucket is Public to the internet and the IAM role the user has is {}".format(binding["role"])
                     outz.append(str1)
@@ -320,12 +320,12 @@ def obj_list(creds, out, project_name):
                     str1 = "Event based hold: ", "enabled" if blob.event_based_hold else "disabled"
                     outputz.append(str1)
                     print(str1)
-                    if not meta.iam_configuration.uniform_bucket_level_access_enabled:
+                    if meta.iam_configuration.uniform_bucket_level_access_enabled:
                         str1 = "ACLs cannot be retrieved for buckets with uniform access"
                         text = colored(str1, 'yellow')
                         outputz.append(str1)
                         print(text)
-                    elif meta.iam_configuration.uniform_bucket_level_access_enabled:
+                    elif not meta.iam_configuration.uniform_bucket_level_access_enabled:
                         acls = bck.blob(obj.name)
                         for entry in acls.acl:
                             if entry["entity"] == "allUsers" or entry["entity"] == "allAuthenticatedUsers":
@@ -426,60 +426,54 @@ def obj_list(creds, out, project_name):
 
 def auto(creds, project_name, WL, WH):
     ls = []
-    slack_al = []
+    c = 0
+    alerter = slack_alerts.Alerter(WH)
     client = storage.Client(project=project_name, credentials=creds)
     try:
-        buckets = client.list_buckets(timeout=10)
+        buckets = client.list_buckets(timeout=60)
         if os.path.exists(str(WL)) and os.path.isfile(str(WL)) and str(WL).endswith(".txt"):
             with open(str(WL), 'r') as wlo:
                 for names in wlo.readlines():
                    ls.append(str(names).rstrip())
             for buck in buckets:
                 if buck.name not in ls:
-                    meta = client.get_bucket(str(buck.name), timeout=10)
-                    if meta.iam_configuration.uniform_bucket_level_access_enabled:
-                        pol = client.bucket(str(buck.name))
-                        policy = pol.get_iam_policy(requested_policy_version=3, timeout=10)
-                        for binding in policy.bindings:
-                            if str(binding["members"]) == "{'allUsers'}" or str(binding["members"]) == "{'allAuthenticatedUsers'}":
-                                alert_time = datetime.datetime.now()
-                                compose = str(alert_time) + " | " + buck.name + " | " + "Public" + " | " + str(binding["role"]) + " | " + str(binding["members"]) + " | " + str(meta.time_created) + " | " + "https://console.cloud.google.com/storage/browser/{}".format(buck.name)
-                                #print(compose)
-                                slack_al.append(compose)
-                            else:
-                                pass
-                    elif not meta.iam_configuration.uniform_bucket_level_access_enabled:
-                        obj = client.list_blobs(buck.name, timeout=10)
+                    meta = client.get_bucket(str(buck.name), timeout=60)
+                    pol = client.bucket(str(buck.name))
+                    policy = pol.get_iam_policy(requested_policy_version=3, timeout=60)
+                    for binding in policy.bindings:
+                        if "allUsers" in binding["members"] or 'allAuthenticatedUsers' in binding["members"]:
+                            alert_time = datetime.datetime.now()
+                            compose = str(alert_time) + " | " + buck.name + " | " + "Public" + " | " + str(binding["role"]) + " | " + str(binding["members"]) + " | " + str(meta.time_created) + " | " + "https://console.cloud.google.com/storage/browser/{}".format(buck.name)
+                            print(compose) #rm
+                            if c == 0:
+                                heading = "FORMAT :- \nalert time | buck/obj name | public | role | alUsers/allAuthUsers | creation time | link" + "\n\n\n"
+                                alerter.info(heading)
+                            c=c+1
+                            alerter.critical(str(c)+". "+compose+"\n\n")
+                        else:
+                            pass
+                    if not meta.iam_configuration.uniform_bucket_level_access_enabled:
+                        obj = client.list_blobs(buck.name, timeout=60)
                         for blobs in obj:
                             if blobs.name not in ls:
                                 blob1 = client.bucket(str(buck.name))
-                                x = blob1.get_blob(blobs.name, timeout=10)
+                                x = blob1.get_blob(blobs.name, timeout=60)
                                 acls = blob1.blob(blobs.name)
                                 for entry in acls.acl:
                                     if entry["entity"] == "allUsers" or entry["entity"] == "allAuthenticatedUsers":
                                         alert_time = datetime.datetime.now()
                                         compose = str(alert_time) + " | " + blobs.name + " | " + "Public" + " | " + str(entry["role"]) + " | " + str(entry["entity"]) + " | " + str(x.updated) + " | " + "https://storage.googleapis.com/{}/{}".format(buck.name, blobs.name)
-                                        #print(compose)
-                                        slack_al.append(compose)
+                                        print(compose)#rm
+                                        if c == 0:
+                                            heading = "FORMAT :- \nalert time | buck/obj name | public | role | alUsers/allAuthUsers | creation time | link" + "\n\n\n"
+                                            alerter.info(heading)
+                                        c=c+1
+                                        alerter.critical(str(c)+". "+compose+"\n\n")
                                     else:
                                         pass
                 else:
                     pass
     except:
-        exit(-1)
-# Sending the alerts over Slack using custom configured incoming webhooks
-
-        if len(slack_al) > 0:
-            c=0
-            alert = ""
-            alerter = slack_alerts.Alerter(WH)
-            heading = "FORMAT :- \nalert time | buck/obj name | public : role : alUsers/allAuthUsers | creation time | link" + "\n\n\n"
-            for al in slack_al:
-                c = c+1
-                alert = alert + str(c) + ". " + al + "\n\n"
-            final_alert = heading + alert
-            alerter.critical(final_alert)
-    else:
         exit(-1)
 
 def cli_help_intf():
