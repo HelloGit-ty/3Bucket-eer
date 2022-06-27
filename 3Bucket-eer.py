@@ -427,6 +427,7 @@ def obj_list(creds, out, project_name):
 def auto(creds, project_name, WL, WH):
     ls = []
     c = 0
+    flag = 0
     alerter = slack_alerts.Alerter(WH)
     client = storage.Client(project=project_name, credentials=creds)
     try:
@@ -438,41 +439,47 @@ def auto(creds, project_name, WL, WH):
             for buck in buckets:
                 if buck.name not in ls:
                     meta = client.get_bucket(str(buck.name), timeout=60)
-                    pol = client.bucket(str(buck.name))
-                    policy = pol.get_iam_policy(requested_policy_version=3, timeout=60)
-                    for binding in policy.bindings:
-                        if "allUsers" in binding["members"] or 'allAuthenticatedUsers' in binding["members"]:
-                            alert_time = datetime.datetime.now()
-                            compose = str(alert_time) + " | " + buck.name + " | " + "Public" + " | " + str(binding["role"]) + " | " + str(binding["members"]) + " | " + str(meta.time_created) + " | " + "https://console.cloud.google.com/storage/browser/{}".format(buck.name)
-                            print(compose) #rm
-                            if c == 0:
-                                heading = "FORMAT :- \nalert time | buck/obj name | public | role | alUsers/allAuthUsers | creation time | link" + "\n\n\n"
-                                alerter.info(heading)
-                            c=c+1
-                            alerter.critical(str(c)+". "+compose+"\n\n")
-                        else:
-                            pass
-                    if not meta.iam_configuration.uniform_bucket_level_access_enabled:
-                        obj = client.list_blobs(buck.name, timeout=60)
-                        for blobs in obj:
-                            if blobs.name not in ls:
-                                blob1 = client.bucket(str(buck.name))
-                                x = blob1.get_blob(blobs.name, timeout=60)
-                                acls = blob1.blob(blobs.name)
-                                for entry in acls.acl:
-                                    if entry["entity"] == "allUsers" or entry["entity"] == "allAuthenticatedUsers":
-                                        alert_time = datetime.datetime.now()
-                                        compose = str(alert_time) + " | " + blobs.name + " | " + "Public" + " | " + str(entry["role"]) + " | " + str(entry["entity"]) + " | " + str(x.updated) + " | " + "https://storage.googleapis.com/{}/{}".format(buck.name, blobs.name)
-                                        print(compose)#rm
-                                        if c == 0:
-                                            heading = "FORMAT :- \nalert time | buck/obj name | public | role | alUsers/allAuthUsers | creation time | link" + "\n\n\n"
-                                            alerter.info(heading)
-                                        c=c+1
-                                        alerter.critical(str(c)+". "+compose+"\n\n")
-                                    else:
-                                        pass
+                    if meta.iam_configuration.public_access_prevention != 'enforced':
+                        pol = client.bucket(str(buck.name))
+                        policy = pol.get_iam_policy(requested_policy_version=3, timeout=60)
+                        for binding in policy.bindings:
+                            if "allUsers" in binding["members"] or 'allAuthenticatedUsers' in binding["members"]:
+                                flag = 1
+                                alert_time = datetime.datetime.now()
+                                compose = str(alert_time) + " | " + buck.name + " | " + "Public" + " | " + str(binding["role"]) + " | " + str(binding["members"]) + " | " + str(meta.time_created) + " | " + "https://console.cloud.google.com/storage/browser/{}".format(buck.name)
+                                print(compose) #rm
+                                if c == 0:
+                                    heading = "FORMAT :- \nalert time | buck/obj name | public | role | alUsers/allAuthUsers | creation time | link" + "\n\n\n"
+                                    alerter.info(heading)
+                                c=c+1
+                                alerter.critical(str(c)+". "+compose+"\n\n")
+                            else:
+                                pass
+                        if not meta.iam_configuration.uniform_bucket_level_access_enabled and flag != 1:# Cloud Storage grants the broader permission set on the resource. So if a fine-grained bucket has allUsers in its bucket level perms then no need to check ACLs of obj.
+                            obj = client.list_blobs(buck.name, timeout=60)
+                            for blobs in obj:
+                                if blobs.name not in ls:
+                                    blob1 = client.bucket(str(buck.name))
+                                    x = blob1.get_blob(blobs.name, timeout=60)
+                                    acls = blob1.blob(blobs.name)
+                                    for entry in acls.acl:
+                                        if entry["entity"] == "allUsers" or entry["entity"] == "allAuthenticatedUsers":
+                                            alert_time = datetime.datetime.now()
+                                            compose = str(alert_time) + " | " + blobs.name + " | " + "Public" + " | " + str(entry["role"]) + " | " + str(entry["entity"]) + " | " + str(x.updated) + " | " + "https://storage.googleapis.com/{}/{}".format(buck.name, blobs.name)
+                                            print(compose)#rm
+                                            if c == 0:
+                                                heading = "FORMAT :- \nalert time | buck/obj name | public | role | alUsers/allAuthUsers | creation time | link" + "\n\n\n"
+                                                alerter.info(heading)
+                                            c=c+1
+                                            alerter.critical(str(c)+". "+compose+"\n\n")
+                                        else:
+                                            pass
+                    else:
+                        pass
                 else:
                     pass
+        else:
+            print("The whitelist file either does not exist or is of the wrong format!")
     except:
         exit(-1)
 
