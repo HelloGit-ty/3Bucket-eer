@@ -427,7 +427,6 @@ def obj_list(creds, out, project_name):
 def auto(creds, project_name, WL, WH):
     ls = []
     c = 0
-    flag = 0
     alerter = slack_alerts.Alerter(WH)
     client = storage.Client(project=project_name, credentials=creds)
     try:
@@ -438,6 +437,7 @@ def auto(creds, project_name, WL, WH):
                    ls.append(str(names).rstrip())
             for buck in buckets:
                 if buck.name not in ls:
+                    flag = 0
                     meta = client.get_bucket(str(buck.name), timeout=60)
                     if meta.iam_configuration.public_access_prevention != 'enforced':
                         pol = client.bucket(str(buck.name))
